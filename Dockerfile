@@ -17,6 +17,7 @@ RUN apt-get update && apt-get install -y \
 # Upgrade pip
 RUN python3 -m pip install --upgrade pip
 
+
 # Install PyTorch with CUDA support
 #RUN pip install torch torchvision torchaudio
 
