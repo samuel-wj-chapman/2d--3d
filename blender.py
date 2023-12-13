@@ -1,12 +1,14 @@
-import bpy
+iimport bpy
 import os
 import math
 import random
 
-# Parameters
-stl_directory = "path/to/stl_files"  # Update with actual path
+import os
+
+# Use os.path.expanduser to expand the tilde to the full home directory path
+stl_directory = os.path.expanduser("~/Documents/dataset/Mushroom/files/")
 stl_file_paths = [os.path.join(stl_directory, f) for f in os.listdir(stl_directory) if f.endswith('.stl')]
-output_directory = "path/to/output"  # Update with actual path
+output_directory = os.path.expanduser("~/Documents")
 num_images_per_object = 10
 view_coverage_range = (0.7, 0.9)  # Object coverage in the camera view
 
@@ -14,6 +16,25 @@ view_coverage_range = (0.7, 0.9)  # Object coverage in the camera view
 def clear_scene():
     bpy.ops.object.select_all(action='SELECT')
     bpy.ops.object.delete()
+    
+    # Function to ensure a camera exists and is set as the active camera for the scene
+def setup_camera():
+    # Check if there is a camera in the scene
+    camera = None
+    for obj in bpy.data.objects:
+        if obj.type == 'CAMERA':
+            camera = obj
+            break
+    
+    # If no camera was found, create one
+    if camera is None:
+        bpy.ops.object.camera_add(location=(0, -3, 1))
+        camera = bpy.context.object
+    
+    # Set the newly added or found camera as the active camera
+    bpy.context.scene.camera = camera
+
+    return camera
 
 # Function to load an STL file
 def load_stl(file_path):
@@ -51,8 +72,10 @@ bpy.ops.object.light_add(type='SUN', radius=1, align='WORLD', location=(0, 0, 10
 for stl_path in stl_file_paths:
     clear_scene()
     load_stl(stl_path)
+    camera = setup_camera()  # Ensure a camera is set up
     obj = bpy.context.selected_objects[0]  # Assuming STL has one object
     position_camera(obj, view_coverage_range)
+
 
     for i in range(num_images_per_object):
         angle_x = random.randint(0, 360)
