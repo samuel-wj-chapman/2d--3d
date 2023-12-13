@@ -37,8 +37,23 @@ class ImageSTLDataset(Dataset):
         return image, point_cloud
 
     def stl_to_pointcloud(self, stl_path):
-        # Implement STL to point cloud conversion
-        # This is an example using numpy-stl
+        # Load STL and convert to point cloud
         your_mesh = mesh.Mesh.from_file(stl_path)
         points = np.array(your_mesh.points).reshape(-1, 3)
-        return points
+
+        # Apply random rotation
+        rotated_points = self.apply_random_rotation(points)
+        return rotated_points
+
+    def apply_random_rotation(self, points):
+        # Create a random rotation matrix
+        theta = np.radians(random.uniform(0, 360))
+        c, s = np.cos(theta), np.sin(theta)
+        # Example: rotation around the Z-axis
+        rotation_matrix = np.array([[c, -s, 0],
+                                    [s, c, 0],
+                                    [0, 0, 1]])
+
+        # Apply rotation to all points
+        rotated_points = np.dot(points, rotation_matrix)
+        return rotated_points
