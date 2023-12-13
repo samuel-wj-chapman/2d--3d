@@ -76,7 +76,8 @@ class Discriminator(nn.Module):
 # Check if GPU is available and set the device accordingly
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-        # Initialize models
+# Initialize models
+num_epochs = 10 
 generator = ImageToPointCloud().to(device)
 discriminator = Discriminator().to(device)
 
