@@ -36,6 +36,17 @@ def setup_camera():
 
     return camera
 
+def resize_object(obj, target_max_dimension):
+    # Calculate the current maximum dimension of the object
+    current_max_dimension = max(obj.dimensions)
+
+    # Calculate the scale factor
+    scale_factor = target_max_dimension / current_max_dimension
+
+    # Apply the scale factor uniformly to the object
+    obj.scale *= scale_factor
+
+
 def setup_lights():
     light_data = bpy.data.lights.new(name="Soft_Light", type='AREA')
     light_data.energy = 1000  # Adjust energy as needed for your scene
@@ -50,21 +61,55 @@ def setup_lights():
 # Function to load an STL file
 def load_stl(file_path):
     bpy.ops.import_mesh.stl(filepath=file_path)
+    
+def look_at(obj):
+    # Pointing the camera to the object
+    direction = obj.location - bpy.context.scene.camera.location
+    # Rotation angles
+    rot_quat = direction.to_track_quat('-Z', 'Y')
+    bpy.context.scene.camera.rotation_euler = rot_quat.to_euler()
 
-# Function to position the camera based on object bounds
-def position_camera(obj, coverage):
-    # Calculate the camera distance from the object
-    dimensions = obj.dimensions
-    max_dimension = max(dimensions)
-    camera_distance = (0.5 * max_dimension) / math.tan(math.radians(bpy.context.scene.camera.data.angle_x / 2))
+def position_camera(obj, fixed_distance):
+    # Random angles for spherical coordinates
+    theta = math.radians(random.uniform(0, 360))  # Random angle in [0, 360)
+    phi = math.radians(random.uniform(0, 180))   # Random angle in [0, 180)
 
-    # Adjust for coverage
-    coverage_factor = random.uniform(*coverage)
-    camera_distance /= coverage_factor
+    # Spherical to Cartesian conversion for camera position
+    x = fixed_distance * math.sin(phi) * math.cos(theta)
+    y = fixed_distance * math.sin(phi) * math.sin(theta)
+    z = fixed_distance * math.cos(phi)
 
-    # Set camera location to maintain the object in view
-    bpy.context.scene.camera.location = (0, -camera_distance, camera_distance)
-    bpy.context.scene.camera.rotation_euler = (math.radians(45), 0, 0)
+    # Set camera location
+    bpy.context.scene.camera.location = (x, y, z)
+
+    # Point the camera towards the object
+    look_at(obj)
+    
+def apply_random_material(obj):
+    # Create a new material
+    mat = bpy.data.materials.new(name="Random_Material")
+
+    # Enable 'Use nodes'
+    mat.use_nodes = True
+    nodes = mat.node_tree.nodes
+
+    # Get the Principled BSDF (the default shader node)
+    principled_bsdf = next(n for n in nodes if n.type == 'BSDF_PRINCIPLED')
+
+    # Randomize color
+    principled_bsdf.inputs['Base Color'].default_value = (random.random(), random.random(), random.random(), 1)
+    
+    # Randomize other properties (e.g., roughness, metallic)
+    principled_bsdf.inputs['Roughness'].default_value = random.random()
+    principled_bsdf.inputs['Metallic'].default_value = random.random()
+
+    # Assign it to the object
+    if obj.data.materials:
+        obj.data.materials[0] = mat
+    else:
+        obj.data.materials.append(mat)
+
+
 
 
 # Function to render and save an image
@@ -84,14 +129,20 @@ def render_save_image(obj_name, angle_x, angle_y, output_path, image_id):
 bpy.ops.object.light_add(type='SUN', radius=1, align='WORLD', location=(0, 0, 10))
 
 # Main processing loop
+fixed_distance = 3  # Fixed distance from the object, adjust as needed 
+target_max_dimension = 1
+
 for stl_path in stl_file_paths:
     clear_scene()
-    setup_lights()  # Set up surround lights
+    setup_lights()
     load_stl(stl_path)
-    camera = setup_camera()
-    obj = bpy.context.selected_objects[0]
-    position_camera(obj, view_coverage_range)
 
+    obj = bpy.context.selected_objects[0]
+    resize_object(obj, target_max_dimension)  # Resize the object
+    apply_random_material(obj)  # Apply random material
+
+    camera = setup_camera()
+    position_camera(obj, fixed_distance)  # Position the camera
 
     for i in range(num_images_per_object):
         angle_x = random.randint(0, 360)
