@@ -27,8 +27,10 @@ class ImageSTLDataset(Dataset):
         if self.transform:
             image = self.transform(image)
 
-        # Load STL and convert to point cloud
-        stl_name = image_name.replace('.png', '.stl')  # modify this based on your filename structure
+        # Extract object name from image filename
+        # Assuming the filename format is 'objectname_angleX_angleY_imageID.png'
+        object_name = image_name.split('_')[0]  # Adjust this based on actual filename format
+        stl_name = f"{object_name}.stl"  # Construct STL filename
         stl_path = os.path.join(self.stl_folder, stl_name)
         point_cloud = self.stl_to_pointcloud(stl_path)
 
