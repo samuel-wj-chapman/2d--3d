@@ -7,13 +7,40 @@ from dataloader import ImageSTLDataset
 from torch.utils.data import DataLoader
 from torchvision import transforms
 import torch.nn.functional as F
+import os
+
+
+import torch
+from torchvision.models import resnet50
+import time
+
+def download_model_with_retry(model_func, attempts=3, sleep_interval=5):
+    for attempt in range(attempts):
+        try:
+            print(f"Attempt {attempt + 1} of {attempts}")
+            return model_func(pretrained=True)
+        except RuntimeError as e:
+            print(f"Failed to download on attempt {attempt + 1}: {e}")
+            if attempt < attempts - 1:
+                time.sleep(sleep_interval)
+            else:
+                raise
+
 
 
 class ImageInterpretationModel(nn.Module):
     def __init__(self):
         super(ImageInterpretationModel, self).__init__()
         # Load a pre-trained ResNet-50 model
-        resnet = resnet50(pretrained=True)
+        #resnet = resnet50(pretrained=True)
+        #resnet = download_model_with_retry(resnet50, attempts=10, sleep_interval=5)
+        resnet = resnet50(pretrained=False)
+
+        weights_path = './resnet50-0676ba61.pth'  # Update with your path
+        if os.path.exists(weights_path):
+            resnet.load_state_dict(torch.load(weights_path))
+        else:
+            raise RuntimeError(f"Failed to load weights from {weights_path}")
         
         # Remove the last fully connected layer
         self.features = nn.Sequential(*list(resnet.children())[:-1])
@@ -94,8 +121,8 @@ def save_point_cloud_as_stl(point_cloud, filename):
 
 
 
-image_folder = 'path/to/image_folder'
-stl_folder = 'path/to/stl_folder'
+image_folder = './images'
+stl_folder = './stldataset'
 
 # Define any required transformations
 transform = transforms.Compose([

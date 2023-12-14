@@ -1,0 +1,22 @@
+version: '3.7'
+services:
+  app:
+    image: pytorch
+    command: /bin/bash
+    volumes:
+      - .:/app
+    stdin_open: true
+    tty: true
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+    ipc: host
+    ulimits:
+      memlock: -1
+      stack: 67108864

@@ -1,7 +1,7 @@
 import torch
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
-from stl import mesh  # or any other preferred library for handling STL files
+from stl import Mesh # or any other preferred library for handling STL files
 import numpy as np
 from PIL import Image
 import os
@@ -38,7 +38,7 @@ class ImageSTLDataset(Dataset):
 
     def stl_to_pointcloud(self, stl_path):
         # Load STL and convert to point cloud
-        your_mesh = mesh.Mesh.from_file(stl_path)
+        your_mesh = Mesh.from_file(stl_path)
         points = np.array(your_mesh.points).reshape(-1, 3)
 
         # Apply random rotation

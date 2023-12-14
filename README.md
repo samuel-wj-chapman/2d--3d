@@ -27,3 +27,13 @@ docker run --gpus all 3d-image-gan
 ```
 note the docker image may require you to create an account and generate a key with nvidia if you have not already. 
 
+
+
+
+
+;things to add
+
+colour changes for objects
+
+decimate point clouds 
+
