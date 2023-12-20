@@ -35,5 +35,5 @@ note the docker image may require you to create an account and generate a key wi
 
 colour changes for objects
 
-decimate point clouds 
+decimate point clouds - done
 

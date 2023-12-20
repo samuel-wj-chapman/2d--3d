@@ -8,6 +8,7 @@ from torch.utils.data import DataLoader
 from torchvision import transforms
 import torch.nn.functional as F
 import os
+from tqdm import tqdm
 
 
 import torch
@@ -132,7 +133,7 @@ transform = transforms.Compose([
 ])
 
 dataset = ImageSTLDataset(image_folder=image_folder, stl_folder=stl_folder, transform=transform)
-dataloader = DataLoader(dataset, batch_size=4, shuffle=True)
+dataloader = DataLoader(dataset, batch_size=32, shuffle=True)
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -157,10 +158,13 @@ import torch.nn.functional as F
 for epoch in range(num_epochs):
     total_d_loss, total_g_loss = 0, 0
 
-    for images, real_point_clouds in dataloader:
+    dataloader_with_progress = tqdm(dataloader, desc=f"Epoch {epoch + 1}/{num_epochs}")
+
+    for images, real_point_clouds in dataloader_with_progress:
         # Move data to the device (GPU or CPU)
-        images = images.to(device)
-        real_point_clouds = real_point_clouds.to(device)
+        #print('here')
+        images = images.to(device).float() 
+        real_point_clouds = real_point_clouds.to(device).float() 
         
         # Real labels (1s) and fake labels (0s)
         real_labels = torch.ones(images.size(0), 1).to(device)
@@ -168,16 +172,18 @@ for epoch in range(num_epochs):
 
         # Train Discriminator
         optimizer_D.zero_grad()
+
         
         # Real point clouds
         real_loss = F.binary_cross_entropy(discriminator(real_point_clouds), real_labels)
         
         # Generate fake point clouds
         fake_point_clouds = generator(images)
+
         
         # Fake point clouds
         fake_loss = F.binary_cross_entropy(discriminator(fake_point_clouds.detach()), fake_labels)
-        
+
         # Total discriminator loss
         d_loss = (real_loss + fake_loss) / 2
         d_loss.backward()
@@ -190,6 +196,7 @@ for epoch in range(num_epochs):
         g_loss.backward()
         optimizer_G.step()
         total_g_loss += g_loss.item()
+        dataloader_with_progress.set_postfix(D_loss=d_loss.item(), G_loss=g_loss.item())
 
     # Save generated point clouds periodically
     if (epoch + 1) % save_interval == 0:
