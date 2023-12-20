@@ -88,23 +88,55 @@ class ImageToPointCloud(nn.Module):
         return x
 
 
+class MiniBatchDiscrimination(nn.Module):
+    def __init__(self, in_features, out_features, B):
+        super(MiniBatchDiscrimination, self).__init__()
+        self.in_features = in_features
+        self.out_features = out_features
+        self.B = B
+        self.T = nn.Parameter(torch.Tensor(in_features, out_features, B))
+        nn.init.normal_(self.T, 0, 1)
+
+    def forward(self, x):
+        batch_size = x.size(0)
+
+        # Compute M tensor from input x and learned tensor T
+        M = torch.mm(x, self.T.view(self.in_features, -1))
+        M = M.view(batch_size, self.out_features, self.B)
+
+        # Expand M for broadcasting
+        M = M.unsqueeze(0)
+        M_T = M.permute(1, 2, 3, 0)
+
+        # Compute out tensor
+        out = torch.abs(M - M_T).sum(2).squeeze(2)
+        out = torch.sum(torch.exp(-out), dim=2)
+        out = out.view(batch_size, -1)
+
+        return torch.cat([x, out], 1)
+
 class Discriminator(nn.Module):
     def __init__(self, num_points=1024):
         super(Discriminator, self).__init__()
         self.num_points = num_points
 
-        # A simple discriminator model
         self.model = nn.Sequential(
-            nn.Linear(num_points * 3, 512),
+            nn.Linear(num_points * 3, 1024),
             nn.LeakyReLU(0.2),
-            nn.Linear(512, 256),
+            nn.Linear(1024, 512),
             nn.LeakyReLU(0.2),
-            nn.Linear(256, 1),
+            # MiniBatch Discrimination layer
+            MiniBatchDiscrimination(512, 128, 32),
+            nn.Linear(512 + 128, 256),  # Notice the input size is adjusted
+            nn.LeakyReLU(0.2),
+            nn.Linear(256, 128),
+            nn.LeakyReLU(0.2),
+            nn.Linear(128, 1),
             nn.Sigmoid()
         )
 
     def forward(self, x):
-        x = x.view(x.size(0), -1)  # Flatten the point cloud
+        x = x.view(x.size(0), -1)
         return self.model(x)
 
 
@@ -154,12 +186,16 @@ fixed_sample = torch.randn(4, 3, 224, 224).to(device)
 # Training Loop
 import torch.nn.functional as F
 
+last_generated = None
+
 # Training Loop
 # Training Loop
 for epoch in range(num_epochs):
     total_d_loss, total_g_loss = 0, 0
 
     dataloader_with_progress = tqdm(dataloader, desc=f"Epoch {epoch + 1}/{num_epochs}")
+
+    
 
     for images, real_point_clouds in dataloader_with_progress:
         # Move data to the device (GPU or CPU)
@@ -180,6 +216,11 @@ for epoch in range(num_epochs):
         
         # Generate fake point clouds
         fake_point_clouds = generator(images)
+
+        if last_generated is not None:
+            consistency_loss = F.mse_loss(fake_point_clouds, last_generated)
+            g_loss += consistency_loss
+        last_generated = fake_point_clouds.detach()
 
         
         # Fake point clouds
