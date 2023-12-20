@@ -27,7 +27,8 @@ def download_model_with_retry(model_func, attempts=3, sleep_interval=5):
             else:
                 raise
 
-
+def add_noise(inputs, mean=0.0, std=0.1):
+    return inputs + torch.randn_like(inputs) * std + mean
 
 class ImageInterpretationModel(nn.Module):
     def __init__(self):
@@ -88,46 +89,20 @@ class ImageToPointCloud(nn.Module):
         return x
 
 
-class MiniBatchDiscrimination(nn.Module):
-    def __init__(self, in_features, out_features, B):
-        super(MiniBatchDiscrimination, self).__init__()
-        self.in_features = in_features
-        self.out_features = out_features
-        self.B = B
-        self.T = nn.Parameter(torch.Tensor(in_features, out_features, B))
-        nn.init.normal_(self.T, 0, 1)
 
-    def forward(self, x):
-        batch_size = x.size(0)
-
-        # Compute M tensor from input x and learned tensor T
-        M = torch.mm(x, self.T.view(self.in_features, -1))
-        M = M.view(batch_size, self.out_features, self.B)
-
-        # Expand M for broadcasting
-        M = M.unsqueeze(0)
-        M_T = M.permute(1, 2, 3, 0)
-
-        # Compute out tensor
-        out = torch.abs(M - M_T).sum(2).squeeze(2)
-        out = torch.sum(torch.exp(-out), dim=2)
-        out = out.view(batch_size, -1)
-
-        return torch.cat([x, out], 1)
 
 class Discriminator(nn.Module):
     def __init__(self, num_points=1024):
         super(Discriminator, self).__init__()
         self.num_points = num_points
 
+        # Define the model without the MiniBatchDiscrimination layer
         self.model = nn.Sequential(
             nn.Linear(num_points * 3, 1024),
             nn.LeakyReLU(0.2),
             nn.Linear(1024, 512),
             nn.LeakyReLU(0.2),
-            # MiniBatch Discrimination layer
-            MiniBatchDiscrimination(512, 128, 32),
-            nn.Linear(512 + 128, 256),  # Notice the input size is adjusted
+            nn.Linear(512, 256),
             nn.LeakyReLU(0.2),
             nn.Linear(256, 128),
             nn.LeakyReLU(0.2),
@@ -138,6 +113,16 @@ class Discriminator(nn.Module):
     def forward(self, x):
         x = x.view(x.size(0), -1)
         return self.model(x)
+
+    def intermediate_forward(self, x, layer_index):
+        """
+        Forward pass up to a specified layer.
+        """
+        for i, module in enumerate(self.model):
+            x = module(x)
+            if i == layer_index:
+                return x
+        return x
 
 
 from stl import mesh
@@ -199,7 +184,6 @@ for epoch in range(num_epochs):
 
     for images, real_point_clouds in dataloader_with_progress:
         # Move data to the device (GPU or CPU)
-        #print('here')
         images = images.to(device).float() 
         real_point_clouds = real_point_clouds.to(device).float() 
         
@@ -207,24 +191,17 @@ for epoch in range(num_epochs):
         real_labels = torch.ones(images.size(0), 1).to(device)
         fake_labels = torch.zeros(images.size(0), 1).to(device)
 
+        noisy_real = add_noise(real_point_clouds)
+        fake_point_clouds = generator(images)
+        noisy_fake = add_noise(fake_point_clouds)
+
         # Train Discriminator
         optimizer_D.zero_grad()
-
         
-        # Real point clouds
-        real_loss = F.binary_cross_entropy(discriminator(real_point_clouds), real_labels)
-        
-        # Generate fake point clouds
-        fake_point_clouds = generator(images)
-
-        if last_generated is not None:
-            consistency_loss = F.mse_loss(fake_point_clouds, last_generated)
-            g_loss += consistency_loss
-        last_generated = fake_point_clouds.detach()
-
-        
-        # Fake point clouds
-        fake_loss = F.binary_cross_entropy(discriminator(fake_point_clouds.detach()), fake_labels)
+        # Real point clouds with noise
+        real_loss = F.binary_cross_entropy(discriminator(noisy_real), real_labels)
+        # Fake point clouds with noise
+        fake_loss = F.binary_cross_entropy(discriminator(noisy_fake.detach()), fake_labels)
 
         # Total discriminator loss
         d_loss = (real_loss + fake_loss) / 2
@@ -235,6 +212,17 @@ for epoch in range(num_epochs):
         # Train Generator
         optimizer_G.zero_grad()
         g_loss = F.binary_cross_entropy(discriminator(fake_point_clouds), real_labels)
+
+        # Feature Matching Loss
+        intermediate_output = discriminator.intermediate_forward(fake_point_clouds, layer_index=3)  # Choose an appropriate layer index
+        fm_loss = F.mse_loss(fake_point_clouds.view(images.size(0), -1), intermediate_output.detach().view(images.size(0), -1))
+        g_loss += fm_loss  # Combine with existing generator loss
+
+        if last_generated is not None:
+            consistency_loss = F.mse_loss(fake_point_clouds, last_generated)
+            g_loss += consistency_loss
+        last_generated = fake_point_clouds.detach()
+
         g_loss.backward()
         optimizer_G.step()
         total_g_loss += g_loss.item()
