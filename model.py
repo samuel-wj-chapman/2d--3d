@@ -175,48 +175,34 @@ last_generated = None
 
 # Training Loop
 # Training Loop
+# Training Loop
 for epoch in range(num_epochs):
     total_d_loss, total_g_loss = 0, 0
 
     dataloader_with_progress = tqdm(dataloader, desc=f"Epoch {epoch + 1}/{num_epochs}")
 
-    
-
     for images, real_point_clouds in dataloader_with_progress:
-        # Move data to the device (GPU or CPU)
         images = images.to(device).float() 
         real_point_clouds = real_point_clouds.to(device).float() 
-        
-        # Real labels (1s) and fake labels (0s)
+
         real_labels = torch.ones(images.size(0), 1).to(device)
         fake_labels = torch.zeros(images.size(0), 1).to(device)
 
-        noisy_real = add_noise(real_point_clouds)
         fake_point_clouds = generator(images)
+        noisy_real = add_noise(real_point_clouds)
         noisy_fake = add_noise(fake_point_clouds)
 
         # Train Discriminator
         optimizer_D.zero_grad()
-        
-        # Real point clouds with noise
         real_loss = F.binary_cross_entropy(discriminator(noisy_real), real_labels)
-        # Fake point clouds with noise
         fake_loss = F.binary_cross_entropy(discriminator(noisy_fake.detach()), fake_labels)
-
-        # Total discriminator loss
         d_loss = (real_loss + fake_loss) / 2
         d_loss.backward()
         optimizer_D.step()
-        total_d_loss += d_loss.item()
 
         # Train Generator
         optimizer_G.zero_grad()
         g_loss = F.binary_cross_entropy(discriminator(fake_point_clouds), real_labels)
-
-        # Feature Matching Loss
-        intermediate_output = discriminator.intermediate_forward(fake_point_clouds, layer_index=3)  # Choose an appropriate layer index
-        fm_loss = F.mse_loss(fake_point_clouds.view(images.size(0), -1), intermediate_output.detach().view(images.size(0), -1))
-        g_loss += fm_loss  # Combine with existing generator loss
 
         if last_generated is not None:
             consistency_loss = F.mse_loss(fake_point_clouds, last_generated)
@@ -228,13 +214,12 @@ for epoch in range(num_epochs):
         total_g_loss += g_loss.item()
         dataloader_with_progress.set_postfix(D_loss=d_loss.item(), G_loss=g_loss.item())
 
-    # Save generated point clouds periodically
     if (epoch + 1) % save_interval == 0:
         with torch.no_grad():
-            generator.eval()  # Set the generator to eval mode for sample generation
-            sample_point_cloud = generator(fixed_sample).cpu().numpy()  # Generate a sample
+            generator.eval() 
+            sample_point_cloud = generator(fixed_sample).cpu().numpy() 
             save_point_cloud_as_stl(sample_point_cloud[0], f"generated_epoch_{epoch+1}.stl")
-            generator.train()  # Set the generator back to train mode
+            generator.train() 
 
     avg_d_loss = total_d_loss / len(dataloader)
     avg_g_loss = total_g_loss / len(dataloader)
