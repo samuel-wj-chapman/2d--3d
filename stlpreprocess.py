@@ -19,8 +19,8 @@ def preprocess_stl_to_pointcloud(stl_path, target_num_points=1024):
     return points
 
 # Path settings
-stl_directory = 'path/to/stldirectory'
-output_directory = 'path/to/outputdirectory'
+stl_directory = './stldataset'
+output_directory = './stldataset_preprocessed'
 if not os.path.exists(output_directory):
     os.makedirs(output_directory)
 

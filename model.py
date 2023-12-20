@@ -124,6 +124,7 @@ def save_point_cloud_as_stl(point_cloud, filename):
 
 image_folder = './images'
 stl_folder = './stldataset'
+preprocessed_stl = './stldataset_preprocessed'
 
 # Define any required transformations
 transform = transforms.Compose([
@@ -132,7 +133,7 @@ transform = transforms.Compose([
     # Add any additional transformations as needed
 ])
 
-dataset = ImageSTLDataset(image_folder=image_folder, stl_folder=stl_folder, transform=transform)
+dataset = ImageSTLDataset(image_folder=image_folder, stl_folder=stl_folder, processed_stl_folder=preprocessed_stl , transform=transform)
 dataloader = DataLoader(dataset, batch_size=32, shuffle=True)
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")

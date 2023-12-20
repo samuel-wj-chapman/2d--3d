@@ -8,12 +8,11 @@ import os
 import random
 
 class ImageSTLDataset(Dataset):
-    def __init__(self, image_folder, stl_folder, transform=None):
+    def __init__(self, image_folder, stl_folder, processed_stl_folder, transform=None):
         self.image_folder = image_folder
         self.stl_folder = stl_folder
+        self.processed_stl_folder = processed_stl_folder
         self.transform = transform
-
-        # Assuming image filenames and STL filenames have a matching pattern
         self.image_files = [f for f in os.listdir(image_folder) if f.endswith('.png')]
 
     def __len__(self):
@@ -22,18 +21,24 @@ class ImageSTLDataset(Dataset):
     def __getitem__(self, idx):
         image_name = self.image_files[idx]
         image_path = os.path.join(self.image_folder, image_name)
-
-        # Load image with PIL and convert to RGB
         image = Image.open(image_path).convert('RGB')
         if self.transform:
             image = self.transform(image)
 
         # Extract object name from image filename
-        # Assuming the filename format is 'objectname_angleX_angleY_imageID.png'
-        object_name = image_name.split('_angle')[0]  # Adjust this based on actual filename format
-        stl_name = f"{object_name}.stl"  # Construct STL filename
-        stl_path = os.path.join(self.stl_folder, stl_name)
-        point_cloud = self.stl_to_pointcloud(stl_path)
+        object_name = image_name.split('_angle')[0]
+        processed_point_cloud_path = os.path.join(self.processed_stl_folder, f"{object_name}.pt")
+
+        if os.path.exists(processed_point_cloud_path):
+            # Load preprocessed point cloud
+            point_cloud = torch.load(processed_point_cloud_path)
+        else:
+            # Process STL file
+            stl_path = os.path.join(self.stl_folder, f"{object_name}.stl")
+            point_cloud = torch.tensor(self.stl_to_pointcloud(stl_path)).float()
+
+        
+        point_cloud = self.apply_random_rotation(point_cloud)
 
         return image, point_cloud
 
@@ -44,7 +49,7 @@ class ImageSTLDataset(Dataset):
         # Load STL and convert to point cloud
         your_mesh = Mesh.from_file(stl_path)
         points = np.array(your_mesh.points).reshape(-1, 3)
-        points = self.apply_random_rotation(points)
+        #points = self.apply_random_rotation(points)
 
         current_num_points = len(points)
 
@@ -63,15 +68,14 @@ class ImageSTLDataset(Dataset):
 
 
 
-    def apply_random_rotation(self, points):
+    def apply_random_rotation(self, points_tensor):
         # Create a random rotation matrix
         theta = np.radians(random.uniform(0, 360))
         c, s = np.cos(theta), np.sin(theta)
-        # Example: rotation around the Z-axis
         rotation_matrix = np.array([[c, -s, 0],
                                     [s, c, 0],
                                     [0, 0, 1]])
 
         # Apply rotation to all points
-        rotated_points = np.dot(points, rotation_matrix)
+        rotated_points = torch.matmul(points_tensor, torch.tensor(rotation_matrix).float())
         return rotated_points
