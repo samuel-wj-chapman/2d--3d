@@ -151,7 +151,7 @@ transform = transforms.Compose([
 ])
 
 dataset = ImageSTLDataset(image_folder=image_folder, stl_folder=stl_folder, processed_stl_folder=preprocessed_stl , transform=transform)
-dataloader = DataLoader(dataset, batch_size=32, shuffle=True)
+dataloader = DataLoader(dataset, batch_size=64, shuffle=True)
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -204,15 +204,19 @@ for epoch in range(num_epochs):
         optimizer_G.zero_grad()
         g_loss = F.binary_cross_entropy(discriminator(fake_point_clouds), real_labels)
 
-        if last_generated is not None:
+        # Skip consistency loss if batch sizes don't match
+        if last_generated is not None and last_generated.size(0) == fake_point_clouds.size(0):
             consistency_loss = F.mse_loss(fake_point_clouds, last_generated)
             g_loss += consistency_loss
-        last_generated = fake_point_clouds.detach()
 
         g_loss.backward()
         optimizer_G.step()
         total_g_loss += g_loss.item()
         dataloader_with_progress.set_postfix(D_loss=d_loss.item(), G_loss=g_loss.item())
+
+        # Update last_generated for next iteration
+        if images.size(0) == dataloader.batch_size:  # Check if full batch
+            last_generated = fake_point_clouds.detach()
 
     if (epoch + 1) % save_interval == 0:
         with torch.no_grad():
