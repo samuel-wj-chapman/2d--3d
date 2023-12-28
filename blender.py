@@ -1,4 +1,4 @@
-import bpy
+iimport bpy
 import os
 import math
 import random
@@ -6,11 +6,27 @@ import random
 import os
 
 # Use os.path.expanduser to expand the tilde to the full home directory path
-stl_directory = os.path.expanduser("~/Documents/dataset/Mushroom/files/")
+stl_directory = os.path.expanduser("~/Documents/dataset/stldataset")
 stl_file_paths = [os.path.join(stl_directory, f) for f in os.listdir(stl_directory) if f.endswith('.stl')]
-output_directory = os.path.expanduser("~/Documents")
-num_images_per_object = 10
+output_directory = os.path.expanduser("~/Documents/dataset/images2")
+num_images_per_object = 500
 view_coverage_range = (0.7, 0.9)  # Object coverage in the camera view
+
+
+# Set the render resolution to 224x224 pixels
+bpy.context.scene.render.resolution_x = 600
+bpy.context.scene.render.resolution_y = 600
+bpy.context.scene.render.resolution_percentage = 100
+
+def set_origin_to_center_of_geometry(obj):
+    # Set the object as the active object
+    bpy.context.view_layer.objects.active = obj
+    # Select the object
+    obj.select_set(True)
+    # Set the origin to the center of geometry
+    bpy.ops.object.origin_set(type='ORIGIN_CENTER_OF_MASS', center='BOUNDS')
+    # Deselect the object
+    obj.select_set(False)
 
 # Function to delete all objects in the scene
 def clear_scene():
@@ -139,14 +155,20 @@ for stl_path in stl_file_paths:
 
     obj = bpy.context.selected_objects[0]
     resize_object(obj, target_max_dimension)  # Resize the object
-    apply_random_material(obj)  # Apply random material
+    set_origin_to_center_of_geometry(obj) 
 
     camera = setup_camera()
     position_camera(obj, fixed_distance)  # Position the camera
 
     for i in range(num_images_per_object):
+        apply_random_material(obj)  # Apply random material for each image
         angle_x = random.randint(0, 360)
         angle_y = random.randint(0, 360)
+        position_camera(obj, fixed_distance)  # Position the camera
+        look_at(obj)  # Ensure the camera is looking at the object
         render_save_image(obj.name, angle_x, angle_y, output_directory, i)
+        print('rendered')
+
 
 print("Dataset generation complete.")
+
